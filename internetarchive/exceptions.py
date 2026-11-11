@@ -57,3 +57,7 @@ class AccountAPIError(Exception):
 
 class DirectoryTraversalError(Exception):
     """Raised when a computed local file path escapes the intended destination directory."""
+
+
+class MetadataValidationError(Exception):
+    """Raised when file metadata required for a verified download is missing or invalid."""

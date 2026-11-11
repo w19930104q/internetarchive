@@ -800,6 +800,31 @@ class Item(BaseItem):
                 errors.append(f.name)
         return responses if return_responses else errors
 
+    @staticmethod
+    def _validate_atomic_options(stdout, return_responses, range_jobs, headers):
+        """Reject option combinations incompatible with an atomic target-path download.
+
+        :param stdout: Whether output is streamed to stdout.
+        :param return_responses: Whether raw responses are requested instead of files.
+        :param range_jobs: Partial byte-range jobs, if any.
+        :param headers: Per-request headers (a ``Range`` entry is an intentional partial).
+        :raises ValueError: If any streaming/partial option is enabled.
+        """
+        incompatible = []
+        if stdout:
+            incompatible.append('stdout')
+        if return_responses:
+            incompatible.append('return_responses')
+        if range_jobs:
+            incompatible.append('range_jobs')
+        if headers and any(k.lower() == 'range' for k in headers):
+            incompatible.append('a Range header')
+        if incompatible:
+            raise ValueError(
+                'atomic downloads only write to target paths; they cannot be '
+                f'combined with {", ".join(incompatible)}'
+            )
+
     # ruff: noqa: PLR0912, PLR0913, PLR0917
     def download(
         self,
@@ -829,6 +854,7 @@ class Item(BaseItem):
         count_views: bool = False,
         headers: Mapping | None = None,
         range_jobs: list[tuple[str, str]] | None = None,
+        atomic: bool = False,
     ) -> list[Request | Response]:
         """Download files from an item.
 
@@ -914,6 +940,14 @@ class Item(BaseItem):
                            once. When set, this supersedes ``files``/``formats``/
                            ``glob_pattern`` selection.
 
+        :param atomic: Download each file to a temporary partial file and only
+                       atomically replace the target after its size and
+                       metadata MD5 are both verified, with cross-process
+                       resume state bound to the file identity. Only supported
+                       for downloads to target paths; raises ``ValueError`` when
+                       combined with ``stdout``, ``return_responses``,
+                       ``range_jobs``, or a ``Range`` entry in ``headers``.
+
         :param ignore_history_dir: Do not download any files from the history
                                    dir. This param defaults to ``False``.
 
@@ -929,7 +963,10 @@ class Item(BaseItem):
         return_responses = bool(return_responses)
         no_change_timestamp = bool(no_change_timestamp)
         ignore_history_dir = bool(ignore_history_dir)
+        atomic = bool(atomic)
         params = params or None
+        if atomic:
+            self._validate_atomic_options(stdout, return_responses, range_jobs, headers)
         if source:
             if not isinstance(source, list):
                 source = [source]
@@ -1047,6 +1084,7 @@ class Item(BaseItem):
                     timeout,
                     headers=headers,
                     count_views=count_views,
+                    atomic=atomic,
                 )
             except exceptions.DirectoryTraversalError as exc:  # type: ignore
                 # Record error and continue; do not abort entire download batch.

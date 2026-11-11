@@ -312,6 +312,25 @@ Download from an itemlist:
 
 See ``ia download --help`` for more details.
 
+Atomic verified downloads
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+``ia download --atomic`` writes each file to a temporary
+``<target>.ia-part`` partial with resume state in ``<target>.ia-state``
+and only replaces the final target once the downloaded content matches
+both the metadata size and MD5. An interrupted download resumes from the
+persisted partial on the next invocation — even from a different process
+or machine that shares the destination directory — and a pre-existing
+target is verified before it is skipped rather than trusted blindly. Any
+network, checksum, write, or replacement failure leaves the pre-existing
+target untouched; failed files are reported in the error summary and
+make the command exit non-zero. The flag is off by default and cannot be
+combined with ``--stdout`` or ``--range``.
+
+.. code:: console
+
+    $ ia download --atomic TripDown1905 TripDown1905.ogv
+
 Downloading byte ranges
 ^^^^^^^^^^^^^^^^^^^^^^^^
 

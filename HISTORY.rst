@@ -6,6 +6,23 @@ Release History
 5.12.2 (?)
 ++++++++++
 
+**Features**
+
+- ``File.download``, ``Item.download``, the top-level
+  ``internetarchive.download``, and ``ia download`` now accept an opt-in
+  ``atomic`` / ``--atomic`` mode (default off). Downloads accumulate in a
+  ``<target>.ia-part`` partial with resume state in
+  ``<target>.ia-state`` and only replace the target atomically after both
+  the content length and metadata MD5 verify. Resume state is bound to
+  the item identifier, filename, size, and MD5, so interrupted downloads
+  resume across processes and restart from scratch when the remote file
+  changes; a pre-existing target is verified before being skipped. Any
+  network, checksum, write, or replacement failure leaves the
+  pre-existing target untouched and is surfaced in the batch error list
+  and CLI exit code. The mode only supports target paths and rejects
+  ``stdout``, ``fileobj``, ``return_responses``, and explicit ``Range``
+  before any request.
+
 **Bugfixes**
 
 - ``ia search --fts`` and ``search_items(..., full_text_search=True)`` returned

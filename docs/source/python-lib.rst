@@ -51,6 +51,22 @@ For more control and to persist configuration across operations, use a :class:`~
     ``count_views=True`` to :func:`internetarchive.download`,
     :meth:`Item.download`, or :meth:`File.download`.
 
+.. note::
+
+    Pass ``atomic=True`` to :func:`internetarchive.download`,
+    :meth:`Item.download`, or :meth:`File.download` for a crash-safe,
+    verified download. The bytes are accumulated in a temporary
+    ``<target>.ia-part`` file with resume state in ``<target>.ia-state``,
+    and the target is created or replaced atomically only once the
+    downloaded content matches both the metadata file size and MD5.
+    Interrupted downloads resume across processes from the persisted
+    partial, and a pre-existing target is itself verified before being
+    skipped. A network, checksum, write, or replace failure always leaves
+    any pre-existing target untouched. Atomic mode only supports writing
+    to a target path: combining it with ``stdout``, ``fileobj``,
+    ``return_responses``, or an explicit ``Range`` header raises
+    ``ValueError`` before any request is made.
+
 Simple Functional Interface
 ---------------------------
 

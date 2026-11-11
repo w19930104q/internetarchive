@@ -335,6 +335,7 @@ def download(
     timeout: float | tuple[int, float] | None = None,
     count_views: bool = False,
     headers: Mapping | None = None,
+    atomic: bool = False,
     **get_item_kwargs,
 ) -> list[requests.Request | requests.Response]:
     r"""Download files from an item.
@@ -391,6 +392,12 @@ def download(
                     partial fetch, skipping resume and full-file checksum
                     validation.
 
+    :param atomic: Download to temporary partial files and only atomically
+                   replace each target after its size and metadata MD5 are
+                   both verified, with cross-process resume. Only supported
+                   for downloads to target paths; raises ``ValueError`` when
+                   combined with ``return_responses`` or a ``Range`` header.
+
     :param \*\*kwargs: Optional arguments that ``get_item`` takes.
 
     :returns: A list Requests if debug else a list of Responses.
@@ -416,6 +423,7 @@ def download(
         timeout=timeout,
         count_views=count_views,
         headers=headers,
+        atomic=atomic,
     )
     return r
 

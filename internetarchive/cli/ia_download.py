@@ -72,6 +72,18 @@ def setup(subparsers):
         "-C", "--checksum", action="store_true", help="Skip files based on checksum"
     )
     parser.add_argument(
+        "--atomic",
+        action="store_true",
+        help=(
+            "Atomically verified download: write to a temporary partial file "
+            "and only replace the target once its size and metadata MD5 both "
+            "match, so an interrupted or corrupt download never leaves a "
+            "partial target. Partial state is kept next to the target and "
+            "resumes across invocations; a pre-existing target is verified "
+            "before being skipped. Incompatible with --stdout and --range."
+        ),
+    )
+    parser.add_argument(
         "--checksum-archive",
         action="store_true",
         help="Skip files based on _checksum_archive.txt file",
@@ -392,6 +404,12 @@ def validate_args(args: argparse.Namespace, parser: argparse.ArgumentParser) -> 
     if args.itemlist and args.search:
         parser.error("--itemlist and --search cannot be used together")
 
+    if args.atomic:
+        if args.stdout:
+            parser.error("--atomic cannot be combined with --stdout")
+        if args.ranges:
+            parser.error("--atomic cannot be combined with --range")
+
     if args.itemlist or args.search:
         if args.identifier:
             parser.error("Cannot specify an identifier with --itemlist/--search")
@@ -513,6 +531,7 @@ def main(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
             timeout=args.timeout,
             count_views=args.count_views,
             range_jobs=args.range_jobs,
+            atomic=args.atomic,
         )
         if _errors:
             errors.append(_errors)

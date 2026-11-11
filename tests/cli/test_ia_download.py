@@ -1,4 +1,5 @@
 import argparse
+import hashlib
 import os
 import re
 import sys
@@ -679,6 +680,121 @@ def test_range_job_failure_exits_nonzero(tmpdir_ch):
             ],
             expected_exit_code=1,
         )
+
+
+def test_atomic_cli_download_verifies_and_publishes(tmpdir_ch):
+    """``ia download --atomic`` must verify size and MD5 before publishing the
+    target, and leave no intermediate state behind."""
+    body = b'atomic-cli-body-' * 32
+    md5 = hashlib.md5(body).hexdigest()
+    metadata = json.loads(load_test_data_file('metadata/nasa.json'))
+    for f in metadata['files']:
+        if f['name'] == 'nasa_meta.xml':
+            f['size'] = str(len(body))
+            f['md5'] = md5
+    with IaRequestsMock(assert_all_requests_are_fired=False) as rsps:
+        rsps.add_metadata_mock('nasa', body=json.dumps(metadata))
+        rsps.add(responses.GET, DOWNLOAD_URL_RE, body=body)
+        ia_call(
+            [
+                'ia',
+                '--insecure',
+                'download',
+                '--atomic',
+                '--no-directories',
+                'nasa',
+                'nasa_meta.xml',
+            ]
+        )
+    target = os.path.join(str(tmpdir_ch), 'nasa_meta.xml')
+    assert open(target, 'rb').read() == body
+    assert not os.path.exists(f'{target}.ia-part')
+    assert not os.path.exists(f'{target}.ia-state')
+
+
+def test_atomic_cli_checksum_failure_exits_nonzero_and_keeps_target(tmpdir_ch):
+    """A corrupt body under --atomic fails verification, the CLI exits 1, and
+    any pre-existing target is left byte-for-byte intact."""
+    body = b'corrupt-bytes-from-server'
+    target = os.path.join(str(tmpdir_ch), 'nasa_meta.xml')
+    original = b'pre-existing-good-target'
+    with open(target, 'wb') as fh:
+        fh.write(original)
+    with IaRequestsMock(assert_all_requests_are_fired=False) as rsps:
+        rsps.add_metadata_mock('nasa')
+        rsps.add(responses.GET, DOWNLOAD_URL_RE, body=body)
+        ia_call(
+            [
+                'ia',
+                '--insecure',
+                'download',
+                '--atomic',
+                '--no-directories',
+                'nasa',
+                'nasa_meta.xml',
+            ],
+            expected_exit_code=1,
+        )
+    assert open(target, 'rb').read() == original
+    assert not os.path.exists(f'{target}.ia-part')
+
+
+def test_atomic_cli_rejects_stdout_and_range(tmpdir_ch):
+    """The incompatible --stdout/--range combinations are rejected with the
+    argparse exit code 2 before any request is made."""
+    with IaRequestsMock(assert_all_requests_are_fired=False) as rsps:
+        ia_call(
+            [
+                'ia',
+                '--insecure',
+                'download',
+                '--atomic',
+                '--stdout',
+                'nasa',
+                'nasa_meta.xml',
+            ],
+            expected_exit_code=2,
+        )
+        assert len(rsps.calls) == 0
+        ia_call(
+            [
+                'ia',
+                '--insecure',
+                'download',
+                '--atomic',
+                '--stdout',
+                '--range',
+                '0-9',
+                'nasa',
+                'nasa_meta.xml',
+            ],
+            expected_exit_code=2,
+        )
+        # Still no network calls: both invocations were rejected up front.
+        assert len(rsps.calls) == 0
+
+
+def test_atomic_cli_disabled_by_default_uses_legacy_path(tmpdir_ch):
+    """Without --atomic the flag is off: the legacy direct-to-target write is
+    used and no atomic state files are created."""
+    body = b'legacy path body'
+    with IaRequestsMock(assert_all_requests_are_fired=False) as rsps:
+        rsps.add_metadata_mock('nasa')
+        rsps.add(responses.GET, DOWNLOAD_URL_RE, body=body)
+        ia_call(
+            [
+                'ia',
+                '--insecure',
+                'download',
+                '--no-directories',
+                'nasa',
+                'nasa_meta.xml',
+            ]
+        )
+    target = os.path.join(str(tmpdir_ch), 'nasa_meta.xml')
+    assert open(target, 'rb').read() == body
+    assert not os.path.exists(f'{target}.ia-part')
+    assert not os.path.exists(f'{target}.ia-state')
 
 
 def _range_args(ranges, identifier='nasa', file=None):
